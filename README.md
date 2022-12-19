@@ -5,6 +5,27 @@ This repo contains the code for a Tensorflow 2.x implementation of the Swin Tran
 ![Swin Transformer Architecture proposed by the original paper authors](https://www.section.io/engineering-education/an-overview-of-swin-transformer/swin-transformer.png)
 
 ## Model weights
+All our model checkpoints/weights can be found at [this link](https://drive.google.com/drive/u/1/folders/1ivwyPxcItE7wCs_jWzEyG9y1fT7KYWrL) (LionDrive).
+
+## Overview
+<ol>
+  <li>Swin Transformer Classification on CIFAR-10.ipynb --- Main Notebook which initializes and trains the Swin Transformer model on the CIFAR-10 dataset</li>
+  <li>ViT_Comparison.ipynb, Resnet_Comparison.ipynb, Efficientnet_Comparison.ipynb --- Notebooks that contain training code for comparing other state-of-the-art models on the dataset</li>
+  <li>utils --- Contains all code and utility functions for the Swin transformer implementation using Tensorflow 2.x
+    <ol>
+      <li>model.py --- Contains the main code for initializing the Swin transformer model</li>
+      <li>callback.py --- Contains the code for the LR Scheduling algorithm</li>
+      <li>layers.py --- Contains code for custom layers utilized in the model</li>
+      <li>layer_funcs.py ---Contains helper functions used in custom layers</li>
+      <li>model_vit.py --- Contains code for the Vision Transformer (ViT) implementation in Tensorflow</li>
+    </ol>
+  </li>
+  <li>runs --- Tensorboard logging directory for recording training progress</li>
+</ol>
+- Swin Transformer Classification on CIFAR-10.ipynb --- Main Notebook which initializes and trains the Swin Transformer model on the CIFAR-10 dataset.
+- ViT_Comparison.ipynb, Resnet_Comparison.ipynb, Efficientnet_Comparison.ipynb --- Notebooks that contain training code for comparing other state-of-the-art models on the dataset.
+- utils --- Contains all code and utility functions for the Swin transformer implementation using Tensorflow 2.x
+- runs --- Tensorboard logging directory for recording training progress
 
 ## Organization of this directory
 
