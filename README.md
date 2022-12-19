@@ -8,6 +8,7 @@ This repo contains the code for a Tensorflow 2.x implementation of the Swin Tran
 
 ## Organization of this directory
 
+```
 ./
 ├── Efficientnet_Comparison.ipynb
 ├── README.md
@@ -60,3 +61,4 @@ This repo contains the code for a Tensorflow 2.x implementation of the Swin Tran
     └── model.py
 
 20 directories, 33 files
+```
