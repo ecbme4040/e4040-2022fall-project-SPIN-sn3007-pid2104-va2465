@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Dropout, Conv2D, LayerNormalization, GlobalAveragePooling1D
-from utils.layers import *  #  Mlp, winAttention, DropPath,SwinTransformerBlock, BasicLayer,Patch_Embedding,Patch_merging
+from utils.layers import * 
 
 
 # this code has been ported from pytorch to tensorflow 
