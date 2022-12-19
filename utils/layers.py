@@ -5,6 +5,8 @@ from tensorflow.keras import regularizers
 
 from utils.layer_funcs import *
 
+
+#a simple 2 Layered Perceptron layer with gelu(gaussian error linear units)
 class Mlp(tf.keras.layers.Layer):
     def __init__(self, in_units, hidden_units=None, out_units=None, drop=0., regularizer=None,pre_name=''):
         super().__init__()
@@ -24,12 +26,14 @@ class Mlp(tf.keras.layers.Layer):
         return x
 
 
-class WindowAttention(tf.keras.layers.Layer):
-    def __init__(self, dim, window_size, num_heads, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,regularizer=None,pre_name=''):
+# This is the Transformer architecture inspired from Vision transformer where attention is applied to localised fields of input defined as windows.
+# Windows reduces the size of the attention-matrix to be computed and making them feasible.
+class winAttention(tf.keras.layers.Layer):
+    def __init__(self, dim, win_size, num_heads, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,regularizer=None,pre_name=''):
         super().__init__()
 
         self.dim = dim
-        self.window_size = window_size
+        self.win_size = win_size
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
@@ -42,27 +46,29 @@ class WindowAttention(tf.keras.layers.Layer):
 
 
     def build(self, input_shape):
-        self.relative_position_bias_table = self.add_weight(f'{self.pre_name}/win_attn/rel_pos_bias_table', shape=( (2 * self.window_size[0] - 1) * (2 * self.window_size[1] - 1), self.num_heads),
+
+        self.rltv_position_bias_table = self.add_weight(f'{self.pre_name}/win_attn/rltv_pos_bias_table', 
+                                                            shape=( (2 * self.win_size[0] - 1) * (2 * self.win_size[1] - 1), self.num_heads),
                                                             initializer=tf.initializers.Zeros(), trainable=True)
 
-        coords_h = np.arange(self.window_size[0])
-        coords_w = np.arange(self.window_size[1])
+        coords_h = np.arange(self.win_size[0]) # Window partition initial coordinates height
+        coords_w = np.arange(self.win_size[1]) # Window partition initial coordinates width
 
         coords = np.stack(np.meshgrid(coords_h, coords_w, indexing='ij'))
-        coords_flatten = coords.reshape(2, -1)
+        coords_flat = coords.reshape(2, -1)
 
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        relative_coords = relative_coords.transpose([1, 2, 0])
-        relative_coords[:, :, 0] += self.window_size[0] - 1
-        relative_coords[:, :, 1] += self.window_size[1] - 1
-        relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
+        rltv_coords = coords_flat[:, :, None] - coords_flat[:, None, :] # taking relative coordinattes
+        rltv_coords = rltv_coords.transpose([1, 2, 0])
+        rltv_coords[:, :, 0] += self.win_size[0] - 1
+        rltv_coords[:, :, 1] += self.win_size[1] - 1
+        rltv_coords[:, :, 0] *= 2 * self.win_size[1] - 1
 
-        relative_position_index = relative_coords.sum(-1).astype(np.int64)
-        self.relative_position_index = tf.Variable(initial_value=tf.convert_to_tensor( relative_position_index), trainable=False,name=f'{self.pre_name}/win_attn/rel_pos_index')
+        rltv_position_index = rltv_coords.sum(-1).astype(np.int64)
+        self.rltv_position_index = tf.Variable(initial_value=tf.convert_to_tensor( rltv_position_index), trainable=False,name=f'{self.pre_name}/win_attn/rel_pos_index')
         self.built = True
 
 
-    def call(self, x, mask=None):
+    def call(self, x, mask=None):# implementation of the attention mechanism
         B, N, C = x.get_shape().as_list()
         qkv = tf.transpose(tf.reshape(self.qkv(x), 
                             shape=[-1, N, 3, self.num_heads, C // self.num_heads]), perm=[2, 0, 3, 1, 4])
@@ -70,12 +76,12 @@ class WindowAttention(tf.keras.layers.Layer):
 
         q = q * self.scale
         attn = (q @ tf.transpose(k, perm=[0, 1, 3, 2]))
-        relative_position_bias = tf.gather(self.relative_position_bias_table, tf.reshape(self.relative_position_index, shape=[-1]))
-        relative_position_bias = tf.reshape(relative_position_bias, 
-                                    shape=[self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1])
-        relative_position_bias = tf.transpose(
-                                    relative_position_bias, perm=[2, 0, 1])
-        attn = attn + tf.expand_dims(relative_position_bias, axis=0)
+        rltv_position_bias = tf.gather(self.rltv_position_bias_table, tf.reshape(self.rltv_position_index, shape=[-1]))
+        rltv_position_bias = tf.reshape(rltv_position_bias, 
+                                    shape=[self.win_size[0] * self.win_size[1], self.win_size[0] * self.win_size[1], -1])
+        rltv_position_bias = tf.transpose(
+                                    rltv_position_bias, perm=[2, 0, 1])
+        attn = attn + tf.expand_dims(rltv_position_bias, axis=0)
 
         if mask is not None:
             nW = mask.get_shape()[0]  # tf.shape(mask)[0]
@@ -95,7 +101,7 @@ class WindowAttention(tf.keras.layers.Layer):
 
         return x
 
-
+# randomly drops some dataflow paths
 class DropPath(tf.keras.layers.Layer):
     def __init__(self, drop_prob=None):
         super().__init__()
@@ -104,25 +110,28 @@ class DropPath(tf.keras.layers.Layer):
     def call(self, x, training=None):
         return drop_path(x, self.drop_prob, training)
 
-
+# the main Swintransformer block.
+# major differnce from ViT:
+# not only windowed attention is applied but the windows are then shifted so that relative positional information 
+# between the data that was not initially in the same window, is retained.
 class SwinTransformerBlock(tf.keras.layers.Layer):
-    def __init__(self, dim, input_resolution, num_heads, window_size=7, shift_size=0, mlp_ratio=4., pre_name='',
+    def __init__(self, dim, input_resolution, num_heads, win_size=7, shift_size=0, mlp_ratio=4., pre_name='',
                  qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path_prob=0., regularizer=None):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.num_heads = num_heads
-        self.window_size = window_size
+        self.win_size = win_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
-        if min(self.input_resolution) <= self.window_size:
+        if min(self.input_resolution) <= self.win_size:
             self.shift_size = 0
-            self.window_size = min(self.input_resolution)
-        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
+            self.win_size = min(self.input_resolution)
+        assert 0 <= self.shift_size < self.win_size, "shift_size must in 0-window_size"
         self.pre_name=pre_name
 
         self.norm1 = LayerNormalization(epsilon=1e-5,name=f'{self.pre_name}/layer_norm1')
-        self.attn = WindowAttention(dim, window_size=(self.window_size, self.window_size), num_heads=num_heads,
+        self.attn = winAttention(dim, win_size=(self.win_size, self.win_size), num_heads=num_heads,
                                     qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop,regularizer=regularizer)
         self.drop_path = DropPath( drop_path_prob if drop_path_prob > 0. else 0.)
         
@@ -135,11 +144,11 @@ class SwinTransformerBlock(tf.keras.layers.Layer):
         if self.shift_size > 0:
             H, W = self.input_resolution
             img_mask = np.zeros([1, H, W, 1])
-            h_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
+            h_slices = (slice(0, -self.win_size),
+                        slice(-self.win_size, -self.shift_size),
                         slice(-self.shift_size, None))
-            w_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
+            w_slices = (slice(0, -self.win_size),
+                        slice(-self.win_size, -self.shift_size),
                         slice(-self.shift_size, None))
             cnt = 0
             for h in h_slices:
@@ -148,11 +157,11 @@ class SwinTransformerBlock(tf.keras.layers.Layer):
                     cnt += 1
 
             img_mask = tf.convert_to_tensor(img_mask)
-            mask_windows = window_partition(img_mask, self.window_size)
-            mask_windows = tf.reshape(
-                mask_windows, shape=[-1, self.window_size * self.window_size])
+            mask_wins = win_partition(img_mask, self.win_size)
+            mask_wins = tf.reshape(
+                mask_wins, shape=[-1, self.win_size * self.win_size])
             attn_mask = tf.expand_dims(
-                mask_windows, axis=1) - tf.expand_dims(mask_windows, axis=2)
+                mask_wins, axis=1) - tf.expand_dims(mask_wins, axis=2)
             attn_mask = tf.where(attn_mask != 0, -100.0, attn_mask)
             attn_mask = tf.where(attn_mask == 0, 0.0, attn_mask)
             self.attn_mask = tf.Variable(
@@ -179,17 +188,17 @@ class SwinTransformerBlock(tf.keras.layers.Layer):
             shifted_x = x
 
         # partition windows
-        x_windows = window_partition(shifted_x, self.window_size)
-        x_windows = tf.reshape(
-            x_windows, shape=[-1, self.window_size * self.window_size, C])
+        x_wins = win_partition(shifted_x, self.win_size)
+        x_wins = tf.reshape(
+            x_wins, shape=[-1, self.win_size * self.win_size, C])
 
         # W-MSA/SW-MSA
-        attn_windows = self.attn(x_windows, mask=self.attn_mask)
+        attn_wins = self.attn(x_wins, mask=self.attn_mask)
 
-        # merge windows
-        attn_windows = tf.reshape(
-            attn_windows, shape=[-1, self.window_size, self.window_size, C])
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W, C)
+        # merge wins
+        attn_wins = tf.reshape(
+            attn_wins, shape=[-1, self.win_size, self.win_size, C])
+        shifted_x = win_reverse(attn_wins, self.win_size, H, W, C)
 
         # reverse cyclic shift
         if self.shift_size > 0:
@@ -205,7 +214,7 @@ class SwinTransformerBlock(tf.keras.layers.Layer):
 
         return x
 
-
+#reshapes each layer output into different patches and regroups them and then passed through a dense loayer to reduce the last dimension by2
 class PatchMerging(tf.keras.layers.Layer):
     def __init__(self, input_resolution, dim, regularizer=None, pre_name=''):
         super().__init__()
@@ -217,8 +226,8 @@ class PatchMerging(tf.keras.layers.Layer):
     def call(self, x):
         H, W = self.input_resolution
         B, L, C = x.get_shape().as_list()
-        assert L == H * W, "input feature has wrong size"
-        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
+        assert L == H * W, "input has wrong size"
+        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even values."
 
         x = tf.reshape(x, shape=[-1, H, W, C])
 
@@ -236,27 +245,27 @@ class PatchMerging(tf.keras.layers.Layer):
 
 
 class BasicLayer(tf.keras.layers.Layer):
-    def __init__(self, dim, input_resolution, depth, num_heads, window_size,
+    def __init__(self, dim, input_resolution, depth, num_heads, win_size,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path_prob=0.,  downsample=None, use_checkpoint=False,regularizer=None,pre_name=''):
+                 drop_path_prob=0.,  downsample=None, regularizer=None,pre_name=''):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.depth = depth
-        self.use_checkpoint = use_checkpoint
+
 
         # build blocks
-        self.blocks = tf.keras.Sequential([SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
-                                           num_heads=num_heads, window_size=window_size,
-                                           shift_size=0 if (
-                                               i % 2 == 0) else window_size // 2,
+        self.blocks = tf.keras.Sequential([SwinTransformerBlock(
+                                           dim=dim, input_resolution=input_resolution,
+                                           num_heads=num_heads, win_size=win_size,
+                                           shift_size=0 if (i % 2 == 0) else win_size // 2,
                                            mlp_ratio=mlp_ratio,
                                            qkv_bias=qkv_bias, qk_scale=qk_scale,
                                            drop=drop, attn_drop=attn_drop,
-                                           drop_path_prob=drop_path_prob[i] if isinstance(
-                                               drop_path_prob, list) else drop_path_prob,
+                                           drop_path_prob=drop_path_prob[i] if isinstance(drop_path_prob, list) else drop_path_prob,
                                            regularizer=regularizer,
                                            pre_name=f'{pre_name}/swin_blocks{i}') for i in range(depth)])
+
         if downsample is not None:
             self.downsample = downsample(input_resolution, dim=dim, regularizer= regularizer, pre_name=pre_name)
         else:
@@ -271,10 +280,10 @@ class BasicLayer(tf.keras.layers.Layer):
 
 
 class PatchEmbed(tf.keras.layers.Layer):
-    def __init__(self, img_size=(224, 224), patch_size=(4, 4), in_chans=3, embed_dim=96, norm_layer=None):
+    def __init__(self, img_size=(224, 224), patch_size=(4, 4), in_chans=3, embed_dim=96):
         super().__init__(name='patch_embed')
-        patches_resolution = [img_size[0] //
-                              patch_size[0], img_size[1] // patch_size[1]]
+
+        patches_resolution = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
         self.img_size = img_size
         self.patch_size = patch_size
         self.patches_resolution = patches_resolution
@@ -283,21 +292,17 @@ class PatchEmbed(tf.keras.layers.Layer):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-        self.proj = Conv2D(embed_dim, kernel_size=patch_size,
-                           strides=patch_size)
-        if norm_layer is not None:
-            self.norm = LayerNormalization(epsilon=1e-5,name="layer_norm")
-        else:
-            self.norm = None
+        self.proj = Conv2D(embed_dim, kernel_size=patch_size, strides=patch_size)
+        self.norm = LayerNormalization(epsilon=1e-5,name="layer_norm")
+
 
     def call(self, x):
         B, H, W, C = x.get_shape().as_list()
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input_size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         x = self.proj(x)
-        #x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
-        x = tf.reshape(
-            x, shape=[-1, (H // self.patch_size[0]) * (W // self.patch_size[0]), self.embed_dim])
+
+        x = tf.reshape(x, shape=[-1, (H // self.patch_size[0]) * (W // self.patch_size[0]), self.embed_dim]) # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
         return x

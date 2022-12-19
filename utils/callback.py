@@ -7,6 +7,12 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 from tensorflow.keras.callbacks import Callback
 
+"""
+Learning rate scheduler such as Cosine with linear warmup and oneCycle help in updating the weigths only with the more relevant 
+weight updates that come after significant training and not the random ones in the beginning of training.
+"""
+
+#The learning rate scheduler utilised in the paper.
 class CosineAnnealer:
     def __init__(self, start, end, steps):
         self.start = start
@@ -19,6 +25,9 @@ class CosineAnnealer:
         cos = np.cos(np.pi * (self.n / self.steps)) + 1
         return self.end + (self.start - self.end) / 2. * cos
 
+#the learning rate scheduler OneCycleScheduler is being used for better performance and faster convergence.
+
+# taken from https://www.avanwyk.com/tensorflow-2-super-convergence-with-the-1cycle-policy/ 
 
 class OneCycleScheduler(Callback):
     """ 

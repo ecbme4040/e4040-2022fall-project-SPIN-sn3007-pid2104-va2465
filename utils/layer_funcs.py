@@ -1,31 +1,26 @@
 import numpy as np
 import tensorflow as tf
 
-
-
-
-
-def window_partition(x, window_size):
+#this partitions an input image into windows of win_size
+def win_partition(x, win_size):
     B, H, W, C = x.get_shape().as_list()
-    x = tf.reshape(x, shape=[-1, H // window_size,
-                   window_size, W // window_size, window_size, C])
+    x = tf.reshape(x, shape=[-1, H // win_size, win_size, W // win_size, win_size, C])
     x = tf.transpose(x, perm=[0, 1, 3, 2, 4, 5])
-    windows = tf.reshape(x, shape=[-1, window_size, window_size, C])
-    return windows
+    wins = tf.reshape(x, shape=[-1, win_size, win_size, C])
+    return wins
 
-
-def window_reverse(windows, window_size, H, W, C):
-    x = tf.reshape(windows, shape=[-1, H // window_size,
-                   W // window_size, window_size, window_size, C])
+#Reverses the window
+def win_reverse(wins, win_size, H, W, C):
+    x = tf.reshape(wins, shape=[-1, H // win_size, W // win_size, win_size, win_size, C])
     x = tf.transpose(x, perm=[0, 1, 3, 2, 4, 5])
     x = tf.reshape(x, shape=[-1, H, W, C])
     return x
 
+#helper function that implements drop path based on probability "drop_prob"
 def drop_path(inputs, drop_prob, is_training):
     if (not is_training) or (drop_prob == 0.):
         return inputs
 
-    # Compute keep_prob
     keep_prob = 1.0 - drop_prob
 
     # Compute drop_connect tensor
