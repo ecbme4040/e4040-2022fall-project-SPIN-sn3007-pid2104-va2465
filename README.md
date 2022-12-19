@@ -4,6 +4,11 @@ This repo contains the code for a Tensorflow 2.x implementation of the Swin Tran
 
 ![Swin Transformer Architecture proposed by the original paper authors](https://www.section.io/engineering-education/an-overview-of-swin-transformer/swin-transformer.png)
 
+## Contributors
+- Sanjeev Narasimhan (sn3007)
+- Pranav Deevi (pid2104)
+- Ajay Vanamali (va2465)
+
 ## Model weights
 All our model checkpoints/weights can be found at [this link](https://drive.google.com/drive/u/1/folders/1ivwyPxcItE7wCs_jWzEyG9y1fT7KYWrL) (LionDrive).
 
