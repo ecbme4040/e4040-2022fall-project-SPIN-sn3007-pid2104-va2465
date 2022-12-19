@@ -14,6 +14,7 @@ All our model checkpoints/weights can be found at [this link](https://drive.goog
 
 ## Overview
 <ol>
+  <li>SPIN_project report.pdf --- Final Report PDF<li>
   <li>Swin Transformer Classification on CIFAR-10.ipynb --- Main Notebook which initializes and trains the Swin Transformer model on the CIFAR-10 dataset</li>
   <li>ViT_Comparison.ipynb, Resnet_Comparison.ipynb, Efficientnet_Comparison.ipynb --- Notebooks that contain training code for comparing other state-of-the-art models on the dataset</li>
   <li>utils --- Contains all code and utility functions for the Swin transformer implementation using Tensorflow 2.x
