@@ -22,10 +22,6 @@ All our model checkpoints/weights can be found at [this link](https://drive.goog
   </li>
   <li>runs --- Tensorboard logging directory for recording training progress</li>
 </ol>
-- Swin Transformer Classification on CIFAR-10.ipynb --- Main Notebook which initializes and trains the Swin Transformer model on the CIFAR-10 dataset.
-- ViT_Comparison.ipynb, Resnet_Comparison.ipynb, Efficientnet_Comparison.ipynb --- Notebooks that contain training code for comparing other state-of-the-art models on the dataset.
-- utils --- Contains all code and utility functions for the Swin transformer implementation using Tensorflow 2.x
-- runs --- Tensorboard logging directory for recording training progress
 
 ## Organization of this directory
 
